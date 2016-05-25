@@ -3,8 +3,11 @@
 #include "log/log.h"
 
 #include <boost/foreach.hpp>
+// #include <GL/glew.h>
 #include <GL/glcorearb.h>
 #include <GL/glu.h>
+#include <GL/glext.h>
+#include <GL/wglext.h>
 #include <stdio.h>
 
 #define HIDDEN_NAME "__hidden__"
@@ -68,7 +71,7 @@ void DrawOpenGLScene( )
     glFlush();
 }
 
-void ContextWGL::SetUpOpenGL( HDC hDC)
+void ContextWGL::SetUpOpenGL(HDC hDC)
 {
     static PIXELFORMATDESCRIPTOR pfd = {
         sizeof (PIXELFORMATDESCRIPTOR), // strcut size
@@ -203,13 +206,34 @@ ContextWGL::~ContextWGL()
 bool
 ContextWGL::createWindow(const std::string & name, uint left, uint top, uint width, uint height)
 {
+    WNDCLASSA wc;   // windows class sruct
+    static char szAppName[] = "WGL";
+    HWND hWnd;
+
     if (m_windows.count(name)) {
         rError("window %s already exists", name.c_str());
         return false;
     }
 
-    static char szAppName[] = "WGL";
-    HWND hWnd;
+    wc.style         =
+    CS_HREDRAW | CS_VREDRAW;// Class style(s).
+    wc.lpfnWndProc   =
+        (WNDPROC)WndProc;      // Window Procedure
+    wc.cbClsExtra    = 0;     // No per-class extra data.
+    wc.cbWndExtra    = 0;     // No per-window extra data.
+    wc.hInstance     =
+        m_hInstance;            // Owner of this class
+    wc.hIcon         = NULL;  // Icon name
+    wc.hCursor       =
+        LoadCursor(NULL, IDC_ARROW);// Cursor
+    wc.hbrBackground =
+        (HBRUSH)(COLOR_WINDOW+1);// Default color
+    wc.lpszMenuName  = NULL;  // Menu from .RC
+    wc.lpszClassName = szAppName;            // Name to register as
+
+    // Register the window class
+    RegisterClassA( &wc );
+
     hWnd = CreateWindowA(
                 szAppName, // app name
                 name.c_str(),   // Text for window title bar
@@ -231,14 +255,13 @@ ContextWGL::createWindow(const std::string & name, uint left, uint top, uint wid
 
     // Make the window visible & update its client area
 
-    if(name == HIDDEN_NAME) {
+
         HDC hDC = GetDC(hWnd);
         SetUpOpenGL(hDC);
         ReleaseDC(hWnd, hDC);
-    }
-    else {
-        ShowWindow(m_windows[HIDDEN_NAME]->m_hWnd, 1 );// Show the window
-    }
+
+        ShowWindow(hWnd, 1 );// Show the window
+    
 
     m_windows[name] = new WindowWGL(hWnd, width, height);
     return true;
@@ -259,17 +282,16 @@ ContextWGL::destroyWindow(const std::string & name)
 PFNPROC
 ContextWGL::getProcAddress(const char * procName) const
 {
-  PFNPROC c_glClear = 0;
-  c_glClear = (PFNPROC)wglGetProcAddress(procName);
-  if (!c_glClear || c_glClear == (void *)0x1 || c_glClear == (void *)0x2 || c_glClear == (void *)0x3 || c_glClear == (void *)-1) {
-    printf("contextWGL:getProcAddress:trying other thing\n");
+  PFNPROC proc = (PFNPROC)wglGetProcAddress(procName);
+  if (!proc || proc == (void *)0x1 || proc == (void *)0x2 || proc == (void *)0x3 || proc == (void *)-1) {
+    printf("contextWGL:getProcAddress:::trying other thing. %s\n", procName);
     HMODULE module = LoadLibraryA("opengl32.dll");
-    c_glClear = (PFNPROC)GetProcAddress(module, procName);
+    proc = (PFNPROC)GetProcAddress(module, procName);
   }
-  if (!c_glClear) {
-    printf("everything failed\n");
+  if (!proc) {
+    printf("contextWGL:getProcAddress:::everything failed\n");
   }
-  return c_glClear;
+  return proc;
 }
 
 void
@@ -290,27 +312,6 @@ bool
 ContextWGL::init()
 {
   m_hInstance = GetModuleHandle(0);
-  WNDCLASSA wc;   // windows class sruct
-  static char szAppName[] = "WGL";
-
-  wc.style         =
-  CS_HREDRAW | CS_VREDRAW;// Class style(s).
-  wc.lpfnWndProc   =
-      (WNDPROC)WndProc;      // Window Procedure
-  wc.cbClsExtra    = 0;     // No per-class extra data.
-  wc.cbWndExtra    = 0;     // No per-window extra data.
-  wc.hInstance     =
-      m_hInstance;            // Owner of this class
-  wc.hIcon         = NULL;  // Icon name
-  wc.hCursor       =
-      LoadCursor(NULL, IDC_ARROW);// Cursor
-  wc.hbrBackground =
-      (HBRUSH)(COLOR_WINDOW+1);// Default color
-  wc.lpszMenuName  = NULL;  // Menu from .RC
-  wc.lpszClassName = szAppName;            // Name to register as
-
-  // Register the window class
-  RegisterClassA( &wc );
 
   if(!createWindow(HIDDEN_NAME, 0 , 0 , 1, 1)) {
       return false;
