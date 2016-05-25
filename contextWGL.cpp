@@ -71,7 +71,7 @@ void DrawOpenGLScene( )
     glFlush();
 }
 
-void ContextWGL::SetUpOpenGL(HDC hDC)
+void ContextWGL::SetUpOpenGL(HDC & hDC, HGLRC & hRC, const std::string & name)
 {
     static PIXELFORMATDESCRIPTOR pfd = {
         sizeof (PIXELFORMATDESCRIPTOR), // strcut size
@@ -99,7 +99,9 @@ void ContextWGL::SetUpOpenGL(HDC hDC)
 
     SetPixelFormat( hDC, nMyPixelFormatID, &pfd );
 
-    m_hRC = wglCreateContext( hDC );
+    if(name == HIDDEN_NAME) {
+      hRC = wglCreateContext( hDC );
+    }
 }
 
 LONG WINAPI WndProc( HWND hWnd, UINT msg,
@@ -254,15 +256,18 @@ ContextWGL::createWindow(const std::string & name, uint left, uint top, uint wid
         }
 
     // Make the window visible & update its client area
-
-
-        HDC hDC = GetDC(hWnd);
-        SetUpOpenGL(hDC);
-        ReleaseDC(hWnd, hDC);
-
+    HDC hDC = GetDC(hWnd);
+    if (name == HIDDEN_NAME) {
+        GetPixelFormat(hDC);
+        SetUpOpenGL(hDC, m_hRC, name);
+      }
+    else {
         ShowWindow(hWnd, 1 );// Show the window
-    
-
+        GetPixelFormat(hDC);
+        SetUpOpenGL(hDC, m_hRC, name);
+        wglMakeCurrent(hDC, m_hRC);
+    }
+    ReleaseDC(hWnd, hDC);
     m_windows[name] = new WindowWGL(hWnd, width, height);
     return true;
 }
