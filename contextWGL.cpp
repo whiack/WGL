@@ -237,7 +237,7 @@ ContextWGL::createWindow(const std::string & name, uint left, uint top, uint wid
         ReleaseDC(hWnd, hDC);
     }
     else {
-        ShowWindow( hWnd, 1 );// Show the window
+        ShowWindow(m_windows[HIDDEN_NAME]->m_hWnd, 1 );// Show the window
     }
 
     m_windows[name] = new WindowWGL(hWnd, width, height);
