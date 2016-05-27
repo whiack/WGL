@@ -25,7 +25,7 @@ struct ContextWGL::WindowWGL
 };
 
 //------------------------------------------------------------------------------
-void DrawOpenGLScene( )
+void DrawOpenGLScene(int i )
 {
 	PFNGLCLEARPROC c_glClear = 0;
 	c_glClear = (PFNGLCLEARPROC)wglGetProcAddress("glClear");
@@ -37,41 +37,16 @@ void DrawOpenGLScene( )
 	if (!c_glClear) {
 		printf("everything failed\n");
 	}
-	glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
+  if ( i == 1) {
+    glClearColor(0.0f, 1.0f, 1.0f, 1.0f);
+  }else {
+	   glClearColor(1.0f, 1.0f, 0.0f, 1.0f);
+  }
 	c_glClear(GL_COLOR_BUFFER_BIT);
-
-    //glEnable( GL_DEPTH_TEST );
-
-    //
-    // Define the modelview transformation.
-    //
-    glMatrixMode( GL_MODELVIEW );
-    glLoadIdentity();
-
-    // move the viewpoint out to where we can see everything
-    glTranslatef( 0.0f, 0.0f, -5.0f );
-
-    glBegin(GL_TRIANGLES);
-        glColor3f(1.0,0.0,0.0);//red color for the triangle
-        glVertex3f(0.0,0.0,0);
-        glVertex3f(0.0,1.0,0);
-        glVertex3f(1.0,0.0,0);
-
-        glColor3f(0.0,1.0,0.0);//Green color for the triangle
-        glVertex3f(0.0,0.0,0);
-        glVertex3f(0.0,1.0,0);
-        glVertex3f(-1.0,0.0,0);
-
-        glColor3f(0.0,0.0,1.0);//Blue color for the triangle
-        glVertex3f(1.0,0.0,0);
-        glVertex3f(0.0,-1.0,0);
-        glVertex3f(-1.0,0.0,0);
-    glEnd();
-
-    glFlush();
+  glFlush();
 }
 
-void ContextWGL::SetUpOpenGL(HDC & hDC, HGLRC & hRC, const std::string & name)
+HGLRC ContextWGL::SetUpOpenGL( HWND hWnd )
 {
     static PIXELFORMATDESCRIPTOR pfd = {
         sizeof (PIXELFORMATDESCRIPTOR), // strcut size
@@ -95,13 +70,16 @@ void ContextWGL::SetUpOpenGL(HDC & hDC, HGLRC & hRC, const std::string & name)
     };
 
     int nMyPixelFormatID;
+    HDC hDC;
+    HGLRC hRC;
+
+    hDC = GetDC( hWnd );
     nMyPixelFormatID = ChoosePixelFormat( hDC, &pfd );
-
     SetPixelFormat( hDC, nMyPixelFormatID, &pfd );
+    hRC = wglCreateContext( hDC );
+    ReleaseDC( hWnd, hDC );
 
-    if(name == HIDDEN_NAME) {
-      hRC = wglCreateContext( hDC );
-    }
+    return hRC;
 }
 
 LONG WINAPI WndProc( HWND hWnd, UINT msg,
@@ -153,7 +131,7 @@ LONG WINAPI WndProc( HWND hWnd, UINT msg,
             hDC = BeginPaint( hWnd, &ps );
             wglMakeCurrent( hDC, hRC );
 
-            DrawOpenGLScene();
+            DrawOpenGLScene(1);
 
             // we're done with the RC, so
             // deselect it
@@ -208,67 +186,37 @@ ContextWGL::~ContextWGL()
 bool
 ContextWGL::createWindow(const std::string & name, uint left, uint top, uint width, uint height)
 {
-    WNDCLASSA wc;   // windows class sruct
-    static char szAppName[] = "WGL";
+
+    static char szAppName[] = "OpenGL";
+    static char szTitle[]="Getting Started With OpenGL";
     HWND hWnd;
+    MSG      msg;  // message struct
 
     if (m_windows.count(name)) {
         rError("window %s already exists", name.c_str());
         return false;
     }
-
-    wc.style         =
-    CS_HREDRAW | CS_VREDRAW;// Class style(s).
-    wc.lpfnWndProc   =
-        (WNDPROC)WndProc;      // Window Procedure
-    wc.cbClsExtra    = 0;     // No per-class extra data.
-    wc.cbWndExtra    = 0;     // No per-window extra data.
-    wc.hInstance     =
-        m_hInstance;            // Owner of this class
-    wc.hIcon         = NULL;  // Icon name
-    wc.hCursor       =
-        LoadCursor(NULL, IDC_ARROW);// Cursor
-    wc.hbrBackground =
-        (HBRUSH)(COLOR_WINDOW+1);// Default color
-    wc.lpszMenuName  = NULL;  // Menu from .RC
-    wc.lpszClassName = szAppName;            // Name to register as
-
-    // Register the window class
-    RegisterClassA( &wc );
-
     hWnd = CreateWindowA(
                 szAppName, // app name
-                name.c_str(),   // Text for window title bar
+                szTitle,   // Text for window title bar
                 WS_OVERLAPPEDWINDOW// Window style
                   // NEED THESE for OpenGL calls to work!
                  | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
-                left, top, width, height,
+                CW_USEDEFAULT, 0, CW_USEDEFAULT, 0,
                 NULL,     // no parent window
                 NULL,     // Use the window class menu.
                 m_hInstance,// This instance owns this window
                 NULL      // We don't use any extra data
         );
 
-    // If window could not be created, return zero
-    if ( !hWnd )
-        {
-        return( 0 );
-        }
-
-    // Make the window visible & update its client area
-    HDC hDC = GetDC(hWnd);
-    if (name == HIDDEN_NAME) {
-        GetPixelFormat(hDC);
-        SetUpOpenGL(hDC, m_hRC, name);
-      }
-    else {
-        ShowWindow(hWnd, 1 );// Show the window
-        GetPixelFormat(hDC);
-        SetUpOpenGL(hDC, m_hRC, name);
-        wglMakeCurrent(hDC, m_hRC);
+    if(!hWnd) {
+        return(0);
     }
-    ReleaseDC(hWnd, hDC);
     m_windows[name] = new WindowWGL(hWnd, width, height);
+    if (name != HIDDEN_NAME) {
+      ShowWindow(hWnd, 5 );// Show the window
+    }
+    m_hRC = SetUpOpenGL(hWnd);
     return true;
 }
 
@@ -317,8 +265,29 @@ bool
 ContextWGL::init()
 {
   m_hInstance = GetModuleHandle(0);
+  static char szAppName[] = "OpenGL";
+  static char szTitle[]="Getting Started With OpenGL";
+  WNDCLASSA wc;   // windows class sruct
+  wc.style         =
+  CS_HREDRAW | CS_VREDRAW;// Class style(s).
+  wc.lpfnWndProc   =
+      (WNDPROC)WndProc;      // Window Procedure
+  wc.cbClsExtra    = 0;     // No per-class extra data.
+  wc.cbWndExtra    = 0;     // No per-window extra data.
+  wc.hInstance     =
+      m_hInstance;            // Owner of this class
+  wc.hIcon         = NULL;  // Icon name
+  wc.hCursor       =
+      LoadCursor(NULL, IDC_ARROW);// Cursor
+  wc.hbrBackground =
+      (HBRUSH)(COLOR_WINDOW+1);// Default color
+  wc.lpszMenuName  = NULL;  // Menu from .RC
+  wc.lpszClassName = szAppName;            // Name to register as
 
-  if(!createWindow(HIDDEN_NAME, 0 , 0 , 1, 1)) {
+  // Register the window class
+  RegisterClassA( &wc );
+
+  if(!createWindow(HIDDEN_NAME, 0 , 0 , 900, 900)) {
       return false;
   }
   // makes the context active
@@ -335,9 +304,11 @@ ContextWGL::setWindow()
 void
 ContextWGL::setWindow(const std::string & name)
 {
+    // PAINTSTRUCT ps;
     WindowWGL * win = _getWindow(name);
     if (win == m_lastWindow) return;  // do nothing if no change
     HDC hDC = GetDC(win->m_hWnd);
+    // HDC hDC = BeginPaint(win->m_hWnd, &ps);
     wglMakeCurrent(hDC,m_hRC);
     ReleaseDC(win->m_hWnd, hDC);
     m_lastWindow = win;
